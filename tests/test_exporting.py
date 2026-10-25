@@ -135,7 +135,7 @@ class ExportTests(unittest.TestCase):
         first = export_project(self.payload, self.root)
         second = export_project(self.payload, self.root)
         self.assertNotEqual(first, second)
-        self.assertEqual(first.parent, self.root / 'exports')
+        self.assertEqual(first.parent, (self.root / 'exports').resolve())
         self.assertNotIn(':', first.name)
 
 
