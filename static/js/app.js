@@ -7,24 +7,28 @@ let currentStyle = "stick";
 let showLabels = false;
 let dipoleVec = null;       // 최근 계산에서 얻은 쌍극자
 let showDipole = false;     // 쌍극자 화살표 표시 여부 (툴바 토글)
-let gpuAccel = true;
+// 3D 화면(WebGL)에 고성능 GPU를 요청할지 여부. 계산 엔진(MOPAC)의 연산과는 무관하다.
+let gpuAccel = (() => { try { return localStorage.getItem("mopacGpuPref") !== "low-power"; } catch (_) { return true; } })();
 let leftOpen = true;
 let rightOpen = false;
 let lastResults = [];      // The completed result cards currently displayed.
 
-// GPU 가속: 이 3Dmol 빌드는 powerPreference 를 컨텍스트에 넘기지 않으므로
-// getContext 를 패치해 고성능 GPU 를 직접 요청한다. (toggleGPU 가 gpuAccel 갱신)
+// 3Dmol은 powerPreference 를 넘기지 않고, 보통 OffscreenCanvas 하나에 WebGL2 컨텍스트를 만들어
+// 모든 뷰어가 공유한다. 두 캔버스 종류의 getContext 를 모두 감싸 GPU 선택을 직접 요청한다.
 (function patchWebGLPower() {
-  const orig = HTMLCanvasElement.prototype.getContext;
-  HTMLCanvasElement.prototype.getContext = function (type, attrs) {
-    if (typeof type === "string" && type.indexOf("webgl") === 0) {
-      attrs = Object.assign({}, attrs || {}, {
-        powerPreference: gpuAccel ? "high-performance" : "low-power",
-        failIfMajorPerformanceCaveat: false,
-      });
-    }
-    return orig.call(this, type, attrs);
-  };
+  for (const Canvas of [window.HTMLCanvasElement, window.OffscreenCanvas]) {
+    if (!Canvas?.prototype?.getContext) continue;
+    const orig = Canvas.prototype.getContext;
+    Canvas.prototype.getContext = function (type, attrs) {
+      if (typeof type === "string" && type.includes("webgl")) {
+        attrs = Object.assign({}, attrs || {}, {
+          powerPreference: gpuAccel ? "high-performance" : "low-power",
+          failIfMajorPerformanceCaveat: false,
+        });
+      }
+      return orig.call(this, type, attrs);
+    };
+  }
 })();
 
 const $ = (s) => document.querySelector(s);
@@ -57,8 +61,6 @@ function initViewer() {
   const cfg = {
     backgroundColor: document.body.classList.contains("light") ? "white" : "black",
     antialias: true,
-    // GPU 가속: 고성능 GPU 우선 요청
-    powerPreference: gpuAccel ? "high-performance" : "default",
     preserveDrawingBuffer: true,
   };
   viewer = $3Dmol.createViewer($("#viewer"), cfg);
@@ -795,14 +797,33 @@ function toggleTheme() {
     viewer.setBackgroundColor(bg); viewer.render();
   }
 }
+// 현재 3D 화면이 실제로 받은 WebGL 설정과 GPU 이름 (브라우저가 감추면 null)
+function viewerGPU() {
+  const gl = viewer?.renderer?._gl;
+  if (!gl || gl.isContextLost()) return null;
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  return { gl, preference: gl.getContextAttributes()?.powerPreference,
+           renderer: info ? gl.getParameter(info.UNMASKED_RENDERER_WEBGL) : null };
+}
+function updateGpuButton() {
+  const btn = $("#gpuToggle"), gpu = viewerGPU();
+  btn.textContent = "3D GPU: " + (gpuAccel ? "고성능" : "절전");
+  btn.title = "3D 화면을 그릴 GPU 선택 (그래픽 칩이 둘인 PC에서 차이가 납니다. MOPAC 계산은 CPU로 실행됩니다.)\n" +
+    `요청: ${gpuAccel ? "high-performance" : "low-power"} · 적용: ${gpu?.preference || "확인 불가"}` +
+    (gpu?.renderer ? `\nGPU: ${gpu.renderer}` : "");
+}
 function toggleGPU() {
   gpuAccel = !gpuAccel;
-  $("#gpuToggle").textContent = "GPU 가속: " + (gpuAccel ? "ON" : "OFF");
-  // 뷰어 재생성으로 powerPreference 반영
+  try { localStorage.setItem("mopacGpuPref", gpuAccel ? "high-performance" : "low-power"); } catch (_) {}
+  // 공유 WebGL 컨텍스트를 놓아야 3Dmol이 새 설정으로 컨텍스트를 다시 만든다.
+  const view = viewer?.getView?.();
+  viewerGPU()?.gl.getExtension("WEBGL_lose_context")?.loseContext();
   const mol = currentMol;
   $("#viewer").innerHTML = ""; viewer = null; initViewer();
-  if (mol) renderMol(mol);
-  toast("GPU 가속 " + (gpuAccel ? "활성화" : "비활성화") + " (뷰어 재초기화)");
+  if (mol) { renderMol(mol, { keepView: true }); if (view) { viewer.setView(view); viewer.render(); } }
+  updateGpuButton();
+  const applied = viewerGPU()?.preference;
+  toast(`3D 화면 GPU: ${gpuAccel ? "고성능" : "절전"} 요청` + (applied ? ` (적용: ${applied})` : ""));
 }
 
 // ---------- 이벤트 바인딩 ----------
@@ -834,6 +855,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   $("#themeToggle").onclick = toggleTheme;
   $("#gpuToggle").onclick = toggleGPU;
+  updateGpuButton();
 
   document.querySelectorAll("#viewer-toolbar .chip[data-style]").forEach(b => {
     b.onclick = () => { currentStyle = b.dataset.style; applyStyle(); };

@@ -26,7 +26,7 @@
     <button class="btn sm" id="exportBtn">내보내기</button>
     <button class="btn sm" id="toggleLeft">왼쪽 패널</button>
     <button class="btn sm" id="toggleRight">결과 패널</button>
-    <button class="btn sm" id="gpuToggle" title="WebGL GPU 가속 (high-performance GPU 요청)">GPU 가속: ON</button>
+    <button class="btn sm" id="gpuToggle" title="3D 화면을 그릴 GPU 선택 (MOPAC 계산은 CPU로 실행됩니다)">3D GPU: 고성능</button>
     <button class="btn sm" id="themeToggle">흑백 전환</button>
     <button class="btn primary" id="calcBtn">계산하기 ▾</button>
   </header>
@@ -243,7 +243,7 @@
 </div>
 <script id="editorElements" type="application/json">{{ editor_elements | tojson }}</script>
 <script src="{{ url_for('static', filename='js/editor.js') }}?v=16"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=18"></script>
 <script src="{{ url_for('static', filename='js/export.js') }}?v=1"></script>
 <script src="{{ url_for('static', filename='js/batch.js') }}?v=2"></script>
 </body>
