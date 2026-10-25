@@ -11,6 +11,7 @@ import shutil
 import threading
 import time
 from engine_setup import managed_executable
+from element_data import unsupported_elements
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -114,6 +115,10 @@ def list_calc_types():
 # ---------------------------------------------------------------------------
 def build_input(mol_dict, calc_key, charge=0, mult=1, eps=None):
     spec = CALC_TYPES[calc_key]
+    missing = unsupported_elements(mol_dict)
+    if missing:
+        raise ValueError('기본 PM6/PM7 계산을 지원하지 않는 원소입니다: ' + ', '.join(missing) +
+                         '. 표시·편집·내보내기는 가능합니다. 이 계산 옵션은 SPARKLE/더미 원자를 사용하지 않습니다.')
     kw = [spec.get("hamiltonian", DEFAULT_HAMILTONIAN), spec["keywords"]]
     if charge:
         kw.append(f"CHARGE={charge}")

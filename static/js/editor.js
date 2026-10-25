@@ -18,8 +18,17 @@
   };
   const el = id => document.getElementById(id);
   const deepCopy = x => x == null ? x : JSON.parse(JSON.stringify(x));
-  const supported = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Br", "I"]);
-  const radii = { H:.31, B:.85, C:.76, N:.71, O:.66, F:.57, Si:1.11, P:1.07, S:1.05, Cl:1.02, Br:1.20, I:1.39 };
+  const elements = new Map(JSON.parse(el('editorElements').textContent).map(e=>[e.symbol,e]));
+  // Keep established organic import behavior; use the shared covalent radii
+  // for newly available elements instead of treating every metal as carbon.
+  const radii = Object.assign(Object.fromEntries([...elements].map(([s,e])=>[s,e.radius])),
+    { H:.31, B:.85, C:.76, N:.71, O:.66, F:.57, Si:1.11, P:1.07, S:1.05, Cl:1.02, Br:1.20, I:1.39 });
+  function elementInfo(symbol) {
+    const e=elements.get(symbol);
+    return e ? `${e.symbol} · ${e.name} · 원자번호 ${e.number} · ` +
+      (e.pm7?'기본 PM7 계산 지원':'표시·편집용 (기본 PM7 계산 미지원)') +
+      (e.auto_h?'':' · 수소 자동 추가 제외') : '';
+  }
   const modes = {
     add:"빈 3D 화면을 클릭하면 그 위치에 원자가 놓입니다. 결합은 '결합' 도구에서 별도로 연결하세요. 화면을 회전한 뒤 다른 깊이에도 배치할 수 있습니다.",
     bond:"결합할 원자 두 개를 차례로 클릭하세요. 원자는 먼저 자유롭게 배치해 두면 됩니다.",
@@ -45,7 +54,11 @@
   }
   function withoutHs(mol) {
     const atoms=mol.atoms||[];
-    const included=atoms.map((a,i)=>a.symbol!=="H"?i:-1).filter(i=>i>=0);
+    // Metal hydrides / pre-built complexes may contain intentional explicit H.
+    // Retain all atoms when reopening these structures instead of deleting H
+    // that the restricted auto-hydrogen rule cannot reconstruct.
+    const retainHs=atoms.some(a=>!elements.get(a.symbol)?.auto_h);
+    const included=atoms.map((a,i)=>retainHs || a.symbol!=="H"?i:-1).filter(i=>i>=0);
     // Hydrogen-only molecules are editable as well.
     if (!included.length) included.push(...atoms.map((_,i)=>i));
     const ids=new Map(included.map((i,ni)=>[i,ni]));
@@ -109,6 +122,7 @@
     if(!E.active) return;
     const mol=E.molecule,a=mol.atoms[E.selected];
     el("editorSelectedLabel").textContent = a ? `선택: ${a.symbol}${E.selected+1}` : "원자를 선택하세요";
+    el('editorSelectedElementInfo').textContent=a?elementInfo(a.symbol):'';
     const fragments=connectedComponents(mol).length;
     el("editorFragmentInfo").textContent=fragmentDistanceSummary(mol);
     el("editorAtomCount").textContent=`${mol.atoms.length} 원자 · ${mol.bonds.length} 결합 · 독립 조각 ${fragments}개`;
@@ -492,6 +506,8 @@
     finally{if(E.pendingRequest===request){E.pendingRequest=null;setBusy(false);}}
   }
   function init(){
+    el('editorElement').onchange=()=>{el('editorElementInfo').textContent=elementInfo(el('editorElement').value);};
+    el('editorElement').onchange();
     el("edit3DBtn").onclick=()=>E.active?toast("이미 3D 편집 중입니다."):start();
     el("editorClose").onclick=()=>stop(true);
     el("editorModes").addEventListener("click",e=>{const b=e.target.closest("[data-edit-mode]");if(b)setMode(b.dataset.editMode);});

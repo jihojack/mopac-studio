@@ -1,5 +1,22 @@
 # Changelog
 
+## 3.3.1 — 2026-10-25
+
+- Expand both 3D-editor element selectors to all 118 elements with Korean names and atomic numbers from shared element data.
+- Separate the 70 standard PM7 elements from display/edit-only entries and reject unsupported calculation symbols instead of invoking special sparkle/dummy meanings.
+- Avoid implicit hydrogen addition to newly exposed elements; retain explicit hydrogens when reopening metal-containing structures.
+- Keep isolated atoms visible after Apply and extend XYZ element-number/formula handling through Og.
+- Preserve existing organic valence validation and recoverable force-field failures.
+
+## 3.3.0 — 2026-10-25
+
+- Add multi-file drag-and-drop and file selection with separate MOPAC batch options.
+- Calculate files sequentially, expand all SDF records, isolate duplicate names and continue after file/calculation failures.
+- Preserve the current viewer, editor draft, coordinates, undo history and result cards.
+- Report progress, preserve completed results on cancellation and automatically export a summary plus original inputs and full calculation outputs as ZIP.
+- Keep jobs active through parsing/export to prevent native-window or idle shutdown; restore saved job status on page reload.
+- Ignore staging files and tolerate concurrent file renames during workspace refresh.
+
 ## 3.2.0 — 2026-10-25
 
 - Add ZIP/XYZ/MOL/SDF/JSON/CSV/PNG export without embedding, hydrogen addition or coordinate optimization.

@@ -1,10 +1,19 @@
 <!DOCTYPE html>
+{% macro element_options() -%}
+  {% for supported, label in [(true, '기본 PM7 계산 지원 · 70개'), (false, '표시·편집용 · 기본 PM7 미지원 · 48개')] %}
+  <optgroup label="{{ label }}">
+    {% for e in editor_elements if e.pm7 == supported %}
+    <option value="{{ e.symbol }}"{% if e.symbol == 'C' %} selected{% endif %}>{{ e.symbol }} · {{ e.name }} ({{ e.number }})</option>
+    {% endfor %}
+  </optgroup>
+  {% endfor %}
+{%- endmacro %}
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MOPAC Studio</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=16">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=18">
 <script src="{{ url_for('static', filename='lib/3Dmol-min.js') }}"></script>
 </head>
 <body>
@@ -13,6 +22,7 @@
     <h1>⚛ MOPAC Studio</h1>
     <span class="sub">MOPAC · RDKit · PubChem · Avogadro</span>
     <span class="spacer"></span>
+    <button class="btn sm" id="batchBtn" title="구조 파일 여러 개를 끌어다 놓거나 선택해 일괄 계산">일괄 계산</button>
     <button class="btn sm" id="exportBtn">내보내기</button>
     <button class="btn sm" id="toggleLeft">왼쪽 패널</button>
     <button class="btn sm" id="toggleRight">결과 패널</button>
@@ -66,9 +76,10 @@
           <button class="chip" data-edit-mode="delete" title="클릭한 원자 삭제">삭제</button>
         </div>
         <div class="editor-grid">
-          <label>원소<select id="editorElement"><option>C</option><option>N</option><option>O</option><option>H</option><option>F</option><option>S</option><option>P</option><option>B</option><option>Cl</option><option>Br</option><option>I</option><option>Si</option></select></label>
+          <label>원소<select id="editorElement">{{ element_options() }}</select></label>
           <label>결합 차수<select id="editorOrder"><option value="1">단일 (1)</option><option value="2">이중 (2)</option><option value="3">삼중 (3)</option></select></label>
         </div>
+        <p class="editor-element-info" id="editorElementInfo"></p>
         <div class="editor-actions">
           <button class="btn sm" id="editorAdd" title="3D 뷰어 중앙 부근에 별도의 원자 추가">＋ 원자 빠른 추가</button>
           <button class="btn sm" id="editorUndo">↶ 실행 취소</button>
@@ -92,9 +103,10 @@
         <div class="editor-selected">
           <div class="editor-title"><b id="editorSelectedLabel">원자를 선택하세요</b><span id="editorAtomCount"></span></div>
           <div class="editor-grid">
-            <label>원소<select id="editorAtomElement"><option>C</option><option>N</option><option>O</option><option>H</option><option>F</option><option>S</option><option>P</option><option>B</option><option>Cl</option><option>Br</option><option>I</option><option>Si</option></select></label>
+            <label>원소<select id="editorAtomElement">{{ element_options() }}</select></label>
             <label>형식전하<input id="editorFormalCharge" type="number" value="0" min="-4" max="4" step="1"></label>
           </div>
+          <p class="editor-element-info" id="editorSelectedElementInfo"></p>
           <div class="editor-coords">
             <label>X (Å)<input id="editorX" type="number" step="0.1"></label>
             <label>Y (Å)<input id="editorY" type="number" step="0.1"></label>
@@ -187,8 +199,50 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
-<script src="{{ url_for('static', filename='js/editor.js') }}?v=15"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=16"></script>
+<div id="fileDropOverlay" hidden>구조 파일을 놓으면 일괄 계산 창이 열립니다</div>
+<input id="batchFiles" type="file" multiple accept=".xyz,.mol,.sdf,.pdb,.mop,.dat,.arc,.json" hidden>
+<div class="modal-bg" id="batchModal">
+  <div class="modal batch-modal" role="dialog" aria-modal="true" aria-labelledby="batchTitle">
+    <div class="mhead"><h2 id="batchTitle">구조 파일 일괄 계산</h2>
+      <button class="btn sm" id="batchClose" aria-label="일괄 계산 창 닫기">✕</button></div>
+    <div class="mbody">
+      <p class="export-note">파일을 이 창에 끌어다 놓거나 선택하세요. 파일별 순차 계산 후 결과 ZIP을 자동 저장합니다. 현재 3D 편집 구조는 유지됩니다.</p>
+      <button class="btn sm" id="batchChoose">구조 파일 선택</button>
+      <p id="batchFileInfo">선택한 파일이 없습니다.</p>
+      <ul id="batchFileList"></ul>
+      <div id="batchOptions">
+        <p class="export-note">XYZ · MOL · SDF · PDB · MOP/DAT/ARC · Studio JSON. SDF는 모든 구조를 개별 계산합니다. 입력 좌표를 사용하며 수소를 자동 추가하지 않습니다. 파일당 10 MB, 총 100 MB, 최대 200개 파일·500개 구조.</p>
+        <div class="params batch-params">
+          <label><input type="checkbox" id="batchUseCharge" checked> 파일의 전하 사용 (XYZ 기본 0)</label>
+          <label>공통 전하 <input type="number" id="batchCharge" value="0" step="1" min="-100" max="100" disabled></label>
+          <label>공통 스핀다중도 <input type="number" id="batchMult" value="1" min="1" max="5" step="1"></label>
+          <label>용매 ε(COSMO) <input type="number" id="batchEps" value="78.4" min="1" step="0.1"></label>
+        </div>
+        <div class="batch-selection"><b>MOPAC 계산 옵션</b>
+          <button class="btn sm" id="batchAll">전체</button><button class="btn sm" id="batchNone">해제</button>
+          <span id="batchCount"></span></div>
+        <div class="calc-grid" id="batchGrid"></div>
+        <label class="export-option"><input type="checkbox" id="batchAutoDownload" checked> 완료 후 ZIP 다운로드</label>
+      </div>
+      <div id="batchProgress" role="status" aria-live="polite" hidden>
+        <p id="batchMessage"></p><progress id="batchMeter" value="0" max="1"></progress>
+        <p id="batchSummary"></p><div id="batchEntries"></div>
+      </div>
+      <div id="batchSaved" hidden>
+        <p id="batchSavedPath"></p><button class="btn sm" id="batchFolder">결과 폴더 열기</button>
+        <a class="btn sm" id="batchDownload">ZIP 다운로드</a>
+      </div>
+    </div>
+    <div class="mfoot"><span class="export-note" id="batchHint">완료 ZIP: workspace/exports</span>
+      <span class="spacer"></span><button class="btn" id="batchNew" hidden>새 일괄 계산</button>
+      <button class="btn" id="batchStop" hidden>현재 계산 후 중단</button>
+      <button class="btn primary" id="batchRun">선택한 파일 계산 ▶</button></div>
+  </div>
+</div>
+<script id="editorElements" type="application/json">{{ editor_elements | tojson }}</script>
+<script src="{{ url_for('static', filename='js/editor.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
 <script src="{{ url_for('static', filename='js/export.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/batch.js') }}?v=1"></script>
 </body>
 </html>

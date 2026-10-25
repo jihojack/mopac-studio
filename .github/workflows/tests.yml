@@ -32,3 +32,4 @@ jobs:
       - run: node --check static/js/app.js
       - run: node --check static/js/editor.js
       - run: node --check static/js/export.js
+      - run: node --check static/js/batch.js

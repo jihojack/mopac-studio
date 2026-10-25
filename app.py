@@ -30,6 +30,9 @@ import mopac_runner as mr
 import mo_cube
 from editor_3d import from_editor, OptimizationError
 from exporting import export_project, load_export
+from batch_calculations import BatchManager, options as batch_options, MAX_TOTAL_BYTES
+from element_data import ELEMENTS
+from werkzeug.exceptions import RequestEntityTooLarge
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.join(HERE, "workspace")
@@ -59,12 +62,12 @@ def no_cache(response):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", editor_elements=ELEMENTS)
 
 
 @app.route("/api/version")
 def api_version():
-    return jsonify({"ok": True, "version": "3.2.0", "build": "v3-export-desktop-2026-10-25", "editor_api": True,
+    return jsonify({"ok": True, "version": "3.3.1", "build": "v3-elements-2026-10-25", "editor_api": True,
                     "fragments": True, "dragging": True})
 
 
@@ -111,15 +114,21 @@ def _walk(path):
     items = []
     try:
         for name in sorted(os.listdir(path)):
+            if name.endswith('.tmp') or name.startswith('.export-'):
+                continue
             full = os.path.join(path, name)
-            if os.path.isdir(full):
-                items.append({"name": name, "type": "dir", "path": full,
-                              "children": _walk(full)})
-            else:
-                items.append({"name": name, "type": "file", "path": full,
-                              "ext": os.path.splitext(name)[1].lower(),
-                              "size": os.path.getsize(full)})
-    except PermissionError:
+            try:
+                if os.path.isdir(full):
+                    items.append({"name": name, "type": "dir", "path": full,
+                                  "children": _walk(full)})
+                else:
+                    items.append({"name": name, "type": "file", "path": full,
+                                  "ext": os.path.splitext(name)[1].lower(),
+                                  "size": os.path.getsize(full)})
+            except (FileNotFoundError, NotADirectoryError, PermissionError):
+                # Engine cleanup / atomic exports may rename a file after listdir.
+                continue
+    except (FileNotFoundError, NotADirectoryError, PermissionError):
         pass
     return items
 
@@ -343,6 +352,39 @@ def _run_single_calculation(mol, key, charge=0, mult=1, eps=None, run_dir=None):
                 "status": "error", "errors": [f"실행 예외: {e}"]}, run_dir
     finally:
         _end_calculation()
+
+
+BATCH = BatchManager(lambda: WORKSPACE, _run_single_calculation, _begin_calculation, _end_calculation)
+
+
+@app.route('/api/batch', methods=['POST'])
+def api_batch_start():
+    # Restrict this multipart endpoint without limiting existing calculation APIs.
+    request.max_content_length = MAX_TOTAL_BYTES + 2_000_000
+    try:
+        settings = batch_options(json.loads(request.form.get('options', '{}')), mr.CALC_TYPES)
+        job = BATCH.submit(request.files.getlist('files'), settings)
+        return jsonify({'ok': True, 'job': job}), 202
+    except RequestEntityTooLarge:
+        return jsonify({'ok': False, 'error': '전체 업로드는 100 MB까지 지원합니다.'}), 413
+    except (ValueError, OSError) as error:
+        return jsonify({'ok': False, 'error': str(error)}), 400
+
+
+@app.route('/api/batch/<identifier>')
+def api_batch_status(identifier):
+    try:
+        return jsonify({'ok': True, 'job': BATCH.snapshot(identifier)})
+    except ValueError as error:
+        return jsonify({'ok': False, 'error': str(error)}), 404
+
+
+@app.route('/api/batch/<identifier>/cancel', methods=['POST'])
+def api_batch_cancel(identifier):
+    try:
+        return jsonify({'ok': True, 'job': BATCH.cancel(identifier)})
+    except ValueError as error:
+        return jsonify({'ok': False, 'error': str(error)}), 404
 
 
 @app.route("/api/files/result", methods=["POST"])

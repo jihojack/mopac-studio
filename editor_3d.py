@@ -11,10 +11,10 @@ from rdkit.Chem import AllChem
 from rdkit.Geometry import Point3D
 
 from structure import StructureError, _mol_to_dict
+from element_data import AUTO_H_ELEMENTS, ELEMENT_SYMBOLS, unsupported_elements
 
-# Typical organic main-group elements supported by the editor palette.
-EDITOR_ELEMENTS = frozenset(('H', 'B', 'C', 'N', 'O', 'F', 'Si', 'P', 'S',
-                             'Cl', 'Br', 'I'))
+# All real elements can be drawn/exported; calculation coverage is narrower.
+EDITOR_ELEMENTS = ELEMENT_SYMBOLS
 MAX_ATOMS = 300
 
 
@@ -116,6 +116,10 @@ def from_editor(payload, relax_heavy=False):
         if sym not in EDITOR_ELEMENTS:
             raise StructureError(f'지원하지 않는 원소: {sym}')
         atom = Chem.Atom(sym)
+        if sym not in AUTO_H_ELEMENTS:
+            # Do not invent hydrides or oxidation states for metals / newly
+            # exposed elements. Explicit user-supplied H atoms remain intact.
+            atom.SetNoImplicit(True)
         charge = a.get('formal_charge', 0)
         if type(charge) is not int or abs(charge) > 4:
             raise StructureError(f'원자 {i + 1}: 형식전하는 -4~+4의 정수여야 합니다.')
@@ -174,4 +178,11 @@ def from_editor(payload, relax_heavy=False):
     result['warnings'] = (['수소는 추가했지만 MMFF/UFF 보정은 완료되지 않았습니다. '
                            '입력한 원자 좌표는 유지되며, 수소 배치를 확인한 뒤 계산하세요.']
                           if optimization['status'] == 'skipped' else [])
+    if any(a['symbol'] not in AUTO_H_ELEMENTS for a in atoms):
+        result['warnings'].append('금속 등 확장 원소에는 수소를 자동 추가하지 않습니다. '
+                                  '배위결합·형식전하·스핀다중도를 확인하세요.')
+    unsupported = unsupported_elements(result)
+    if unsupported:
+        result['warnings'].append('기본 PM6/PM7 계산 미지원 원소: ' + ', '.join(unsupported) +
+                                  '. 구조 표시·편집·저장은 가능합니다.')
     return result

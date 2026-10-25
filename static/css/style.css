@@ -205,3 +205,22 @@ pre.raw{white-space:pre-wrap;font-size:11px;max-height:240px;overflow:auto;
 .editor-modes .chip{font-size:11px}
 
 .editor-fragment-info{font-size:10.5px;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:7px 8px;margin:7px 0;line-height:1.45}
+.editor-element-info{font-size:10.5px;color:var(--muted);line-height:1.5;margin:6px 0;overflow-wrap:anywhere}
+
+/* Batch upload, options and progress (independent of the molecule viewer). */
+#fileDropOverlay:not([hidden]){position:fixed;inset:12px;z-index:1000;display:flex;align-items:center;justify-content:center;
+  background:#10243be8;border:3px dashed var(--accent);border-radius:14px;color:white;font-size:22px;padding:30px;text-align:center;pointer-events:none}
+.batch-modal{width:min(900px,96vw)}
+.batch-modal [hidden]{display:none!important}
+.batch-modal .mfoot .spacer{flex:1}
+#batchFileList{max-height:110px;overflow:auto;font-size:12px;overflow-wrap:anywhere;padding-left:20px}
+.batch-params{flex-wrap:wrap;margin:14px 0}
+.batch-params input[type=checkbox]{width:auto}
+.batch-selection{display:flex;align-items:center;gap:8px;margin:14px 0;font-size:13px}
+.batch-selection span{margin-left:auto;color:var(--muted);font-size:12px}
+#batchMeter{width:100%;height:16px;accent-color:var(--accent)}
+#batchEntries{max-height:260px;overflow:auto;font-size:12px}
+.batch-entry{padding:8px 0;border-bottom:1px solid var(--border);overflow-wrap:anywhere;line-height:1.5}
+#batchMessage,#batchSavedPath{overflow-wrap:anywhere;font-size:13px;line-height:1.5}
+#batchSaved{margin-top:16px;padding:12px;background:var(--panel2);border-radius:6px}
+#batchDownload{display:inline-block;text-decoration:none}

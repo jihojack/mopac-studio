@@ -106,6 +106,9 @@ function applyStyle() {
   // Standalone (unbonded) atoms must remain visible during free placement.
   const style = editing ? { ...styles[currentStyle], sphere: { scale: 0.33 } } : styles[currentStyle];
   viewer.setStyle({}, style);
+  // Metals / noble gases can be valid standalone atoms without inferred bonds.
+  const isolated=(viewer.getModel()?.selectedAtoms({})||[]).filter(a=>!a.bonds?.length).map(a=>a.index);
+  if(isolated.length)viewer.addStyle({index:isolated},{sphere:{scale:0.33}});
   viewer.render();
 }
 
