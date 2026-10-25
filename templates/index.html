@@ -199,15 +199,17 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
-<div id="fileDropOverlay" hidden>구조 파일을 놓으면 일괄 계산 창이 열립니다</div>
+<div id="fileDropOverlay" hidden>구조 파일이나 폴더를 놓으면 일괄 계산 창이 열립니다</div>
 <input id="batchFiles" type="file" multiple accept=".xyz,.mol,.sdf,.pdb,.mop,.dat,.arc,.json" hidden>
+<input id="batchFolderInput" type="file" multiple webkitdirectory hidden>
 <div class="modal-bg" id="batchModal">
   <div class="modal batch-modal" role="dialog" aria-modal="true" aria-labelledby="batchTitle">
     <div class="mhead"><h2 id="batchTitle">구조 파일 일괄 계산</h2>
       <button class="btn sm" id="batchClose" aria-label="일괄 계산 창 닫기">✕</button></div>
     <div class="mbody">
-      <p class="export-note">파일을 이 창에 끌어다 놓거나 선택하세요. 파일별 순차 계산 후 결과 ZIP을 자동 저장합니다. 현재 3D 편집 구조는 유지됩니다.</p>
+      <p class="export-note">파일이나 폴더를 이 창에 끌어다 놓거나 선택하세요. 폴더는 하위 폴더까지 찾아 지원 형식 파일만 추가합니다. 파일별 순차 계산 후 결과 ZIP을 자동 저장합니다. 현재 3D 편집 구조는 유지됩니다.</p>
       <button class="btn sm" id="batchChoose">구조 파일 선택</button>
+      <button class="btn sm" id="batchChooseFolder">폴더 선택</button>
       <p id="batchFileInfo">선택한 파일이 없습니다.</p>
       <ul id="batchFileList"></ul>
       <div id="batchOptions">
@@ -243,6 +245,6 @@
 <script src="{{ url_for('static', filename='js/editor.js') }}?v=16"></script>
 <script src="{{ url_for('static', filename='js/app.js') }}?v=17"></script>
 <script src="{{ url_for('static', filename='js/export.js') }}?v=1"></script>
-<script src="{{ url_for('static', filename='js/batch.js') }}?v=1"></script>
+<script src="{{ url_for('static', filename='js/batch.js') }}?v=2"></script>
 </body>
 </html>

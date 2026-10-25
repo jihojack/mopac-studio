@@ -7,6 +7,59 @@ window.addEventListener('DOMContentLoaded', () => {
   let files = [], job = null, submitting = false, timer = null, downloading = null;
   let autoDownload = false;
   const calcNames = {};
+  // Folder drops/choosers keep only supported structure files (README, CSV, hidden files are skipped).
+  const EXTS = new Set(['.xyz', '.mol', '.sdf', '.pdb', '.mop', '.dat', '.arc', '.json']);
+  const MAX_SCAN = 5000;
+  const paths = new WeakMap();
+  const extOf = name => { const m = /\.[^./\\]+$/.exec(name); return m ? m[0].toLowerCase() : ''; };
+  const shown = file => paths.get(file) || file.webkitRelativePath || file.name;
+  function keepFromFolder(found) {
+    const kept = [];
+    let skipped = 0;
+    for (const file of found) {
+      const base = shown(file).split('/').pop();
+      if (EXTS.has(extOf(base)) && !base.startsWith('.')) kept.push(file); else skipped++;
+    }
+    kept.sort((a, b) => shown(a).localeCompare(shown(b), 'ko', {numeric: true}));
+    return {kept, skipped};
+  }
+  function readAll(reader) {
+    // Chromium returns directory listings in chunks (about 100 entries per call).
+    return new Promise((resolve, reject) => {
+      const out = [];
+      const next = () => reader.readEntries(chunk => { if (!chunk.length) resolve(out); else { out.push(...chunk); next(); } }, reject);
+      next();
+    });
+  }
+  async function walk(entry, prefix, state) {
+    if (++state.count > MAX_SCAN) throw new Error(`폴더 안 항목이 ${MAX_SCAN}개를 넘습니다. 구조 파일만 모은 폴더를 선택하세요.`);
+    if (entry.isFile) {
+      const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+      paths.set(file, prefix + file.name); state.files.push(file);
+    } else if (entry.isDirectory) {
+      state.folders++;
+      for (const child of await readAll(entry.createReader())) await walk(child, prefix + entry.name + '/', state);
+    }
+  }
+  async function scanDrop(entries) {
+    if (busy()) { show(); toast('일괄 계산이 진행 중입니다. 완료 후 새 파일을 선택하세요.'); return; }
+    show(); el('batchFileInfo').textContent = '폴더에서 구조 파일을 찾는 중…';
+    const state = {files: [], folders: 0, count: 0}, direct = [];
+    try {
+      for (const entry of entries) {
+        if (entry.isDirectory) await walk(entry, '', state);
+        else direct.push(await new Promise((resolve, reject) => entry.file(resolve, reject)));
+      }
+    } catch (error) {
+      el('batchFileInfo').textContent = '선택한 파일이 없습니다.'; toast(errorText(error), 7000); return;
+    }
+    const {kept, skipped} = keepFromFolder(state.files);
+    if (!direct.length && !kept.length) {
+      el('batchFileInfo').textContent = '선택한 파일이 없습니다.';
+      toast(`폴더 ${state.folders}개에서 지원 형식 구조 파일을 찾지 못했습니다.`, 6000); return;
+    }
+    selected([...direct, ...kept], {folders: state.folders, skipped});
+  }
   const show = () => el('batchModal').classList.add('show');
   const busy = () => submitting || (job && !terminal.has(job.status));
   function remember(id) { try { id ? localStorage.setItem('mopacBatch', id) : localStorage.removeItem('mopacBatch'); } catch (_) {} }
@@ -21,22 +74,23 @@ window.addEventListener('DOMContentLoaded', () => {
     const n = el('batchGrid').querySelectorAll('input:checked').length;
     el('batchCount').textContent = `${n}개 선택됨`;
   }
-  function selected(incoming) {
+  function selected(incoming, scan = {}) {
     if (busy()) { show(); toast('일괄 계산이 진행 중입니다. 완료 후 새 파일을 선택하세요.'); return; }
     if (!incoming.length) return;
     if (incoming.length > 200 || incoming.some(f => f.size > 10000000) || incoming.reduce((s,f) => s+f.size,0) > 100000000) {
-      show(); toast('최대 200개 파일, 파일당 10 MB, 전체 100 MB까지 지원합니다.',6000); return;
+      show(); toast(`${incoming.length}개 파일이 선택됐습니다. 최대 200개 파일, 파일당 10 MB, 전체 100 MB까지 지원합니다.`,7000); return;
     }
     reset(); files = incoming;
-    el('batchFileInfo').textContent = `${files.length}개 파일 · ${(files.reduce((s,f)=>s+f.size,0)/1000000).toFixed(2)} MB`;
+    el('batchFileInfo').textContent = `${files.length}개 파일 · ${(files.reduce((s,f)=>s+f.size,0)/1000000).toFixed(2)} MB` +
+      (scan.folders ? ` · 폴더 ${scan.folders}개 탐색` : '') + (scan.skipped ? ` · 구조 파일이 아닌 ${scan.skipped}개 제외` : '');
     for (const file of files) {
-      const li = document.createElement('li'); li.textContent = file.name; el('batchFileList').append(li);
+      const li = document.createElement('li'); li.textContent = shown(file); el('batchFileList').append(li);
     }
     show();
   }
   function reset() {
     clearTimeout(timer); files = []; job = null; remember(null); downloading = null;
-    el('batchOptions').hidden = false; el('batchChoose').disabled = false;
+    el('batchOptions').hidden = false; el('batchChoose').disabled = false; el('batchChooseFolder').disabled = false;
     el('batchFileInfo').textContent = '선택한 파일이 없습니다.';
     el('batchFileList').replaceChildren(); el('batchProgress').hidden = true;
     el('batchSaved').hidden = true; el('batchNew').hidden = true; el('batchStop').hidden = true;
@@ -46,7 +100,7 @@ window.addEventListener('DOMContentLoaded', () => {
   function render() {
     if (!job) return;
     const done = terminal.has(job.status);
-    el('batchOptions').hidden = true; el('batchChoose').disabled = true;
+    el('batchOptions').hidden = true; el('batchChoose').disabled = true; el('batchChooseFolder').disabled = true;
     el('batchRun').hidden = true; el('batchProgress').hidden = false;
     el('batchStop').hidden = done; el('batchNew').hidden = !done;
     const current = job.current || '';
@@ -104,6 +158,15 @@ window.addEventListener('DOMContentLoaded', () => {
   el('batchModal').onclick = event => { if(event.target===el('batchModal')) el('batchClose').click(); };
   el('batchChoose').onclick = () => el('batchFiles').click();
   el('batchFiles').onchange = event => { selected(Array.from(event.target.files)); event.target.value=''; };
+  el('batchChooseFolder').onclick = () => el('batchFolderInput').click();
+  el('batchFolderInput').onchange = event => {
+    const found = Array.from(event.target.files); event.target.value = '';
+    if (!found.length) return;
+    const folders = new Set(found.map(f => (f.webkitRelativePath || '').split('/').slice(0, -1).join('/'))).size;
+    const {kept, skipped} = keepFromFolder(found);
+    if (!kept.length) { show(); toast('선택한 폴더에서 지원 형식 구조 파일을 찾지 못했습니다.', 6000); return; }
+    selected(kept, {folders, skipped});
+  };
   el('batchUseCharge').onchange = () => el('batchCharge').disabled = el('batchUseCharge').checked;
   el('batchNew').onclick = reset;
   for (const [id,checked] of [['batchAll',true],['batchNone',false]]) {
@@ -131,13 +194,19 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     const form = new FormData(); form.append('options',JSON.stringify(settings));
     files.forEach(file=>form.append('files',file,file.name));
-    submitting=true; el('batchRun').disabled=true; el('batchChoose').disabled=true;
+    submitting=true; el('batchRun').disabled=true; el('batchChoose').disabled=true; el('batchChooseFolder').disabled=true;
     el('batchHint').textContent='파일 업로드 중…'; autoDownload=el('batchAutoDownload').checked;
     try {
       const data=await responseJSON(await fetch('/api/batch',{method:'POST',body:form}));
       job=data.job; remember(job.id); render(); poll();
-    } catch(error) { toast(errorText(error),7000); el('batchHint').textContent=errorText(error); }
-    finally { submitting=false; el('batchRun').disabled=false; el('batchChoose').disabled=!!job; }
+    } catch(error) {
+      // fetch() rejects with TypeError when the browser cannot read a selected file or reach the server.
+      const text = error instanceof TypeError
+        ? '파일 업로드를 시작하지 못했습니다. 선택 후 이동·삭제된 파일이 있거나 프로그램이 종료됐을 수 있습니다. 파일을 다시 선택하세요.'
+        : errorText(error);
+      toast(text,8000); el('batchHint').textContent=text;
+    }
+    finally { submitting=false; el('batchRun').disabled=false; el('batchChoose').disabled=!!job; el('batchChooseFolder').disabled=!!job; }
   };
   el('batchFolder').onclick = () => window.MopacExports.openFolder(job.export || job.directory);
   const isFileDrag = event => Array.from(event.dataTransfer?.types || []).includes('Files');
@@ -148,7 +217,10 @@ window.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('drop',event=>{
     if(!isFileDrag(event))return;
     event.preventDefault();depth=0;el('fileDropOverlay').hidden=true;
-    selected(Array.from(event.dataTransfer.files));
+    // Entries must be taken synchronously; the DataTransfer is cleared after this handler returns.
+    const entries=Array.from(event.dataTransfer.items||[]).filter(i=>i.kind==='file').map(i=>i.webkitGetAsEntry?.()||null);
+    if(entries.length&&entries.every(Boolean)&&entries.some(e=>e.isDirectory)) scanDrop(entries);
+    else selected(Array.from(event.dataTransfer.files));
   });
   window.addEventListener('blur',()=>{depth=0;el('fileDropOverlay').hidden=true;});
   window.addEventListener('beforeunload',event=>{if(busy()){event.preventDefault();event.returnValue='';}});
