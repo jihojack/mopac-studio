@@ -48,30 +48,57 @@ def ensure_environment():
     return interpreter
 
 
+def ensure_desktop_environment(interpreter):
+    if os.name != 'nt':
+        raise RuntimeError('독립 앱 창 자동 설치는 Windows를 지원합니다. 다른 환경은 브라우저 모드를 사용하세요.')
+    requirements = ROOT / 'requirements-desktop.txt'
+    expected = hashlib.sha256(requirements.read_bytes()).hexdigest()
+    stamp = ENV / '.mopac-studio-desktop.sha256'
+    installed = stamp.read_text(encoding='ascii').strip() if stamp.is_file() else ''
+    if installed == expected:
+        check = subprocess.run([str(interpreter), '-c', 'import webview'],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if check.returncode == 0:
+            return
+    print('Installing desktop window support ...', flush=True)
+    subprocess.run([str(interpreter), '-m', 'pip', 'install', '-r', str(requirements)], cwd=ROOT, check=True)
+    stamp.write_text(expected + '\n', encoding='ascii')
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Install and start MOPAC Studio locally")
     parser.add_argument("--setup-only", action="store_true", help="Install dependencies without starting the app")
-    parser.add_argument("--background", action="store_true", help="Run the app without a persistent console")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--background", action="store_true", help="Run the app without a persistent console")
+    mode.add_argument('--desktop', action='store_true', help='Open a native Windows app window without browser tabs')
     parser.add_argument("--no-engine", action="store_true", help="Skip MOPAC installation for editor-only/offline use")
     args = parser.parse_args(argv)
     try:
         interpreter = ensure_environment()
         if not args.no_engine:
             ensure_engine(ROOT)
+        if args.desktop:
+            ensure_desktop_environment(interpreter)
         if args.setup_only:
             print("Installation complete. Run Start.bat or python launcher.py.")
             return 0
-        entry = ROOT / ("background_server.py" if args.background else "app.py")
-        if args.background:
+        entry = ROOT / ('desktop_app.py' if args.desktop else "background_server.py" if args.background else "app.py")
+        if args.background or args.desktop:
             options = {}
             if os.name == "nt":
                 interpreter = interpreter.with_name("pythonw.exe")
                 options["creationflags"] = subprocess.CREATE_NO_WINDOW
             else:
                 options["start_new_session"] = True
-            subprocess.Popen([str(interpreter), str(entry)], cwd=ROOT,
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
-            print("MOPAC Studio started. Its browser tab will open automatically.")
+            if args.desktop:
+                with open(ROOT / 'desktop_run.log', 'a', encoding='utf-8') as log:
+                    subprocess.Popen([str(interpreter), str(entry)], cwd=ROOT,
+                                     stdout=log, stderr=log, **options)
+                print('MOPAC Studio desktop window started.')
+            else:
+                subprocess.Popen([str(interpreter), str(entry)], cwd=ROOT,
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **options)
+                print("MOPAC Studio started. Its browser tab will open automatically.")
             return 0
         return subprocess.call([str(interpreter), str(entry)], cwd=ROOT)
     except (RuntimeError, OSError, subprocess.CalledProcessError) as error:

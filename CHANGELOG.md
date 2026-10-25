@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.2.0 — 2026-10-25
+
+- Add ZIP/XYZ/MOL/SDF/JSON/CSV/PNG export without embedding, hydrogen addition or coordinate optimization.
+- Include displayed result tables, current 3D-view image and optional raw calculation files in ZIP bundles.
+- Preserve full-precision graph/coordinates and draft state in JSON; reopen it from the file list.
+- Allow quick-saving drafts while editing; keep selection, undo history and the editor open.
+- Add workspace, result-folder and saved-export folder buttons.
+- Add optional Windows/WebView2 app-window launchers using pywebview, without browser tabs or a persistent console.
+- Stop the app-owned server when its window exits and prevent closure during active calculations.
+- Add exporter, download/restore, folder-opening, app lifecycle and browser regressions.
+
 ## 3.1.0 — 2026-10-25
 
 - Automatically download official MOPAC 23.2.5 during Install/Start on Windows and Linux x86-64; preserve upstream licenses, citations and runtime layout.

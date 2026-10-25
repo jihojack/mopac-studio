@@ -106,6 +106,21 @@ class LauncherTests(unittest.TestCase):
         else:
             self.assertTrue(spawn.call_args.kwargs['start_new_session'])
 
+    def test_desktop_setup_installs_optional_packages_without_starting_window(self):
+        with patch.object(launcher, 'ensure_environment', return_value=launcher.environment_python()), \
+             patch.object(launcher, 'ensure_desktop_environment') as desktop, \
+             patch.object(launcher.subprocess, 'Popen') as spawn:
+            self.assertEqual(launcher.main(['--setup-only', '--desktop']), 0)
+        desktop.assert_called_once()
+        spawn.assert_not_called()
+
+    def test_desktop_mode_launches_native_entrypoint_in_private_environment(self):
+        with patch.object(launcher, 'ensure_environment', return_value=launcher.environment_python()), \
+             patch.object(launcher, 'ensure_desktop_environment'), \
+             patch.object(launcher.subprocess, 'Popen') as spawn:
+            self.assertEqual(launcher.main(['--desktop']), 0)
+        self.assertEqual(spawn.call_args.args[0][1], str(self.root / 'desktop_app.py'))
+
 
 class MopacDiscoveryTests(unittest.TestCase):
     def test_explicit_path_overrides_other_installations(self):

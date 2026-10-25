@@ -10,6 +10,7 @@ let showDipole = false;     // 쌍극자 화살표 표시 여부 (툴바 토글)
 let gpuAccel = true;
 let leftOpen = true;
 let rightOpen = false;
+let lastResults = [];      // The completed result cards currently displayed.
 
 // GPU 가속: 이 3Dmol 빌드는 powerPreference 를 컨텍스트에 넘기지 않으므로
 // getContext 를 패치해 고성능 GPU 를 직접 요청한다. (toggleGPU 가 gpuAccel 갱신)
@@ -166,10 +167,13 @@ async function showOrbital(mgfPath, orbIndex, isoval, optAtoms, name) {
   const atoms = info.atoms?.length ? info.atoms : optAtoms;
   if (!atoms?.length) { toast("오비탈 원자 좌표를 찾을 수 없습니다.", 4000); return; }
   const sameMgf = currentMol?.orbitalSource === mgfPath;
+  const orbitalInfo=lastResults.find(r=>r.mgf_path===mgfPath)?.data?.orbitals?.find(o=>o.index===orbIndex);
+  const orbitalLabel=orbitalInfo?.tag||`MO ${orbIndex+1}`;
   viewer.removeAllSurfaces && viewer.removeAllSurfaces();
-  renderMol({ name: (name || "MO") + " 오비탈", atoms, bonds: [],
+  renderMol({ name: (name || "MO") + " " + orbitalLabel + " 오비탈", atoms, bonds: [],
     charge: currentMol?.charge ?? 0, formula: currentMol?.formula || "",
-    orbitalSource: mgfPath }, { keepView: sameMgf });
+    orbitalSource: mgfPath, orbitalIndex:orbIndex, orbitalLabel,
+    orbitalIsovalue:isoval }, { keepView: sameMgf });
   try {
     const vol = new $3Dmol.VolumeData(info.cube, "cube");
     viewer.addIsosurface(vol, { isoval: isoval, color: "#1f6fff", opacity: 0.9, smoothness: 10 });
@@ -213,11 +217,23 @@ async function loadFile(path) {
   if (window.MopacEditor?.active) {toast("먼저 3D 편집을 완료하거나 취소하세요.");return;}
   toast("파일 로드 중...");
   const r = await postJSON("/api/files/load", { path });
-  if (r.ok) { dipoleVec = null; renderMol(r.mol); toast("로드 완료"); }
+  if (r.ok) {
+    dipoleVec = null;
+    if(Array.isArray(r.results)){
+      if(r.results.length)openRight();
+      renderResults(r.results);
+    }
+    renderMol(r.mol);toast("로드 완료");
+  }
   else toast("오류: " + r.error, 4000);
 }
 async function saveMol() {
-  if (window.MopacEditor?.active) {toast("수소 추가 후 계산에 적용한 다음 저장하세요.");return;}
+  if(window.MopacEditor?.active || currentMol?.editor_draft){
+    const r=await postJSON('/api/export',{format:'json',structure:window.MopacExports.currentStructure(),results:[]});
+    if(r.ok){toast('편집 초안 저장됨: '+r.path,6000);refreshFiles();}
+    else toast('저장 오류: '+r.error,5000);
+    return;
+  }
   if (!currentMol) { toast("저장할 분자가 없습니다"); return; }
   const payload = { name: currentMol.name || "molecule", xyz: molToXYZ(currentMol) };
   if (currentMol.bonds?.length) payload.molblock = window.MopacEditor.toMolBlock(currentMol);
@@ -238,19 +254,23 @@ async function refreshFiles() {
 }
 function renderTree(items) {
   const frag = document.createDocumentFragment();
-  const loadable = [".xyz", ".mol", ".sdf", ".pdb", ".mop", ".arc"];
+  const loadable = [".xyz", ".mol", ".sdf", ".pdb", ".mop", ".arc", ".json"];
   for (const it of items) {
     const el = document.createElement("div");
     if (it.type === "dir") {
       el.className = "tree-item dir";
-      el.innerHTML = `▸ ${it.name}`;
+      const label=document.createElement('span');label.textContent=`▸ ${it.name}`;
+      const open=document.createElement('button');open.className='tree-open-folder';
+      open.textContent='↗';open.title='파일 탐색기에서 폴더 열기';
+      open.onclick=e=>{e.stopPropagation();window.MopacExports.openFolder(it.path);};
+      el.append(label,open);
       const children = document.createElement("div");
       children.className = "tree-children"; children.style.display = "none";
       children.appendChild(renderTree(it.children || []));
       el.onclick = (e) => { e.stopPropagation();
         const open = children.style.display === "none";
         children.style.display = open ? "block" : "none";
-        el.innerHTML = `${open ? "▾" : "▸"} ${it.name}`; el.appendChild(children); };
+        label.textContent = `${open ? "▾" : "▸"} ${it.name}`; };
       el.appendChild(children);
     } else {
       el.className = "tree-item";
@@ -316,6 +336,7 @@ async function runCalculations() {
   }
   const keys = [...document.querySelectorAll("#calcGrid input:checked")].map(c => c.value);
   if (!keys.length) { toast("계산을 1개 이상 선택하세요"); return; }
+  lastResults=[];
   $("#calcModal").classList.remove("show");
   openRight();
   const startedAt = performance.now();
@@ -372,6 +393,7 @@ function activateDipoleFromResults(results) {
   }
 }
 function renderResults(results) {
+  lastResults=results.slice();
   const box = $("#results"); box.innerHTML = "";
   // 쌍극자가 계산되면 자동으로 활성화 (툴바 '쌍극자' 버튼이 바로 동작하도록)
   activateDipoleFromResults(results);
@@ -379,6 +401,7 @@ function renderResults(results) {
   autoShowGeometry(results);
 }
 function renderLiveResults(results) {
+  lastResults=results.slice();
   const box = $("#liveResults");
   if (!box) return;
   box.innerHTML = "";
@@ -518,6 +541,11 @@ function renderCard(res) {
     <span class="spacer" style="flex:1"></span>
     <span class="badge ${isErr ? "err" : "ok"}">${isErr ? "ERROR" : "OK"}</span></div>
     <div class="rb">${body || '<span style="color:var(--muted)">결과 없음</span>'}</div>`;
+  if(res.run_dir){
+    const folder=document.createElement('button');folder.className='btn sm result-folder';
+    folder.textContent='계산 폴더 열기';folder.onclick=()=>window.MopacExports.openFolder(res.run_dir);
+    card.querySelector('.rb').appendChild(folder);
+  }
 
   // 인터랙션
   card.querySelectorAll(".minilink[data-act]").forEach(el => {

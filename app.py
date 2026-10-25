@@ -19,14 +19,17 @@ import threading
 import subprocess
 import tempfile
 import socket
+import sys
+from pathlib import Path
 
-from flask import Flask, request, jsonify, render_template, send_from_directory
+from flask import Flask, request, jsonify, render_template, send_from_directory, send_file
 from flask_cors import CORS
 
 import structure
 import mopac_runner as mr
 import mo_cube
 from editor_3d import from_editor, OptimizationError
+from exporting import export_project, load_export
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.join(HERE, "workspace")
@@ -61,7 +64,7 @@ def index():
 
 @app.route("/api/version")
 def api_version():
-    return jsonify({"ok": True, "version": "3.1.0", "build": "v3-official-mopac-auto-install-2026-10-25", "editor_api": True,
+    return jsonify({"ok": True, "version": "3.2.0", "build": "v3-export-desktop-2026-10-25", "editor_api": True,
                     "fragments": True, "dragging": True})
 
 
@@ -169,6 +172,9 @@ def api_load():
     if not os.path.isfile(path):
         return jsonify({"ok": False, "error": "파일이 없습니다."}), 400
     try:
+        if Path(path).suffix.lower() == '.json':
+            mol, results = load_export(path)
+            return jsonify({"ok": True, "mol": mol, "results": results})
         mol = structure.from_file(path)
         return jsonify({"ok": True, "mol": mol})
     except Exception as e:
@@ -381,6 +387,58 @@ def api_save():
     with open(path, "w", encoding="utf-8") as f:
         f.write(xyz)
     return jsonify({"ok": True, "path": path, "mol_path": mol_path})
+
+
+def _workspace_path(value):
+    path = Path(value or WORKSPACE).resolve()
+    if not path.is_relative_to(Path(WORKSPACE).resolve()):
+        raise ValueError('저장 폴더 안의 경로만 열 수 있습니다.')
+    return path
+
+
+def _open_folder(directory):
+    if os.name == 'nt':
+        os.startfile(str(directory))
+    elif sys.platform == 'darwin':
+        subprocess.Popen(['open', str(directory)])
+    else:
+        subprocess.Popen(['xdg-open', str(directory)])
+
+
+@app.route('/api/files/open-folder', methods=['POST'])
+def api_open_folder():
+    try:
+        data = request.get_json(silent=True) or {}
+        path = _workspace_path(data.get('path'))
+        directory = path if path.is_dir() else path.parent
+        if not path.exists() or not directory.is_dir():
+            raise ValueError('폴더 또는 파일이 없습니다.')
+        _open_folder(directory)
+        return jsonify({'ok': True, 'path': str(directory)})
+    except (ValueError, OSError) as error:
+        return jsonify({'ok': False, 'error': str(error)}), 400
+
+
+@app.route('/api/export', methods=['POST'])
+def api_export():
+    try:
+        if (request.content_length or 0) > 32_000_000:
+            raise ValueError('내보내기 데이터가 너무 큽니다.')
+        path = export_project(request.get_json(silent=True), WORKSPACE)
+        return jsonify({'ok': True, 'path': str(path), 'filename': path.name})
+    except (ValueError, OSError, RuntimeError) as error:
+        return jsonify({'ok': False, 'error': str(error)}), 400
+
+
+@app.route('/api/files/download')
+def api_download():
+    try:
+        path = _workspace_path(request.args.get('path'))
+        if not path.is_file():
+            raise ValueError('다운로드할 파일이 없습니다.')
+        return send_file(path, as_attachment=True, download_name=path.name)
+    except (ValueError, OSError) as error:
+        return jsonify({'ok': False, 'error': str(error)}), 400
 
 
 @app.route("/api/draw", methods=["POST"])

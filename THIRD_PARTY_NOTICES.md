@@ -15,6 +15,8 @@ The license and bundled-code notices were retrieved from the official upstream s
 
 Flask, Flask-Cors, RDKit, PubChemPy, requests, NumPy and their transitive dependencies are installed separately by pip from `requirements.txt`. Each retains its own upstream license; these packages are not vendored into this repository.
 
+The optional Windows app window installs pywebview and its dependencies from `requirements-desktop.txt`. It uses the system WebView2 Runtime. These packages/runtime are not vendored in the repository and retain their upstream licenses.
+
 ## Automatically downloaded MOPAC
 
 The installer downloads the unmodified official [MOPAC 23.2.5 release](https://github.com/openmopac/mopac/releases/tag/v23.2.5) for Windows/Linux x86-64. MOPAC is distributed under [Apache 2.0](licenses/MOPAC-23.2.5.LICENSE). The downloaded distribution's LICENSE, CITATION.cff, runtime libraries and folder structure are preserved in `_engines/`. Archive URLs and SHA-256 values are pinned in `engine_setup.py`.

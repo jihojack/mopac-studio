@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MOPAC Studio</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=12">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=16">
 <script src="{{ url_for('static', filename='lib/3Dmol-min.js') }}"></script>
 </head>
 <body>
@@ -13,6 +13,7 @@
     <h1>⚛ MOPAC Studio</h1>
     <span class="sub">MOPAC · RDKit · PubChem · Avogadro</span>
     <span class="spacer"></span>
+    <button class="btn sm" id="exportBtn">내보내기</button>
     <button class="btn sm" id="toggleLeft">왼쪽 패널</button>
     <button class="btn sm" id="toggleRight">결과 패널</button>
     <button class="btn sm" id="gpuToggle" title="WebGL GPU 가속 (high-performance GPU 요청)">GPU 가속: ON</button>
@@ -38,11 +39,12 @@
         </div>
         <div class="input-row">
           <button class="btn sm" id="drawBtn" style="flex:1">Avogadro 외부 편집기</button>
-          <button class="btn sm" id="saveBtn" title="현재 분자를 워크스페이스에 .xyz로 저장">💾</button>
+          <button class="btn sm" id="saveBtn" title="현재 구조 저장 (편집 초안도 저장 가능)">💾</button>
         </div>
       </div>
       <div class="section" style="flex:0 0 auto;display:flex;align-items:center;gap:8px">
         <h2 style="margin:0;flex:1">로컬 파일</h2>
+        <button class="btn sm" id="openWorkspace" title="파일 탐색기에서 저장 폴더 열기">폴더 열기</button>
         <button class="btn sm" id="refreshBtn">↻</button>
       </div>
       <div id="fileTree"></div>
@@ -156,8 +158,37 @@
   </div>
 </div>
 
+<div class="modal-bg" id="exportModal">
+  <div class="modal export-modal" role="dialog" aria-modal="true" aria-labelledby="exportTitle">
+    <div class="mhead"><h2 id="exportTitle">구조와 계산 정보 내보내기</h2>
+      <button class="btn sm" id="exportClose" aria-label="내보내기 창 닫기">✕</button></div>
+    <div class="mbody">
+      <p id="exportInfo"></p>
+      <label class="export-format">저장 형식<select id="exportFormat">
+        <option value="zip">전체 ZIP — 구조·계산 요약·3D 이미지·원본 파일</option>
+        <option value="json">JSON — 정밀 좌표·결합·계산 결과 (다시 불러오기 가능)</option>
+        <option value="xyz">XYZ — 원자와 좌표</option>
+        <option value="mol">MOL — 좌표와 명시된 결합</option>
+        <option value="sdf">SDF — 좌표와 명시된 결합</option>
+        <option value="csv">CSV — 계산 결과 표 (Excel용)</option>
+        <option value="png">PNG — 현재 3D 화면</option>
+      </select></label>
+      <label class="export-option"><input type="checkbox" id="exportResults" checked> 현재 결과 패널의 계산 정보 포함</label>
+      <label class="export-option"><input type="checkbox" id="exportRaw" checked> ZIP에 원본 계산 파일도 포함</label>
+      <p class="export-note">현재 보는 구조를 그대로 저장합니다. 추가 최적화나 수소 보정은 하지 않습니다. JSON은 좌표 정밀도를 보존하며, MOL/SDF는 파일 형식에 따라 좌표가 반올림될 수 있습니다.</p>
+      <div id="exportSaved" hidden>
+        <b>저장 완료</b><p id="exportPath"></p>
+        <button class="btn sm" id="exportOpenFolder">저장된 파일 폴더 열기</button>
+        <a class="btn sm" id="exportDownload">파일 다운로드</a>
+      </div>
+    </div>
+    <div class="mfoot"><span class="export-note">저장 위치: workspace/exports</span>
+      <span class="spacer" style="flex:1"></span><button class="btn primary" id="exportSave">파일 저장</button></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <script src="{{ url_for('static', filename='js/editor.js') }}?v=15"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=16"></script>
+<script src="{{ url_for('static', filename='js/export.js') }}?v=1"></script>
 </body>
 </html>

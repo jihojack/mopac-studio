@@ -20,6 +20,19 @@ header{display:flex;align-items:center;gap:12px;padding:8px 14px;
 header h1{font-size:16px;margin:0;font-weight:600;letter-spacing:.3px}
 header .sub{color:var(--muted);font-size:12px}
 header .spacer{flex:1}
+header{flex-wrap:wrap}
+@media(max-width:1250px){header .sub{display:none}header{gap:6px}}
+.tree-open-folder{float:right;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0 5px}
+.tree-open-folder:hover{color:var(--accent)}
+.result-folder{display:block;margin-top:10px}
+.export-modal{width:min(650px,94vw)}
+.export-format{display:grid;gap:8px;margin:18px 0}
+.export-format select{width:100%;padding:9px;background:var(--panel2);color:var(--text);border:1px solid var(--border);border-radius:5px}
+.export-option{display:block;margin:12px 0;font-size:13px}
+.export-note{font-size:12px;line-height:1.6;color:var(--muted)}
+#exportSaved{margin-top:18px;padding:14px;background:var(--panel2);border:1px solid var(--border);border-radius:6px}
+#exportPath{font-size:12px;overflow-wrap:anywhere;line-height:1.5}
+#exportDownload{display:inline-block;text-decoration:none;margin-left:6px}
 .btn{background:var(--panel2);color:var(--text);border:1px solid var(--border);
   border-radius:6px;padding:7px 12px;font-size:13px;transition:.12s}
 .btn:hover{border-color:var(--accent);color:var(--accent)}

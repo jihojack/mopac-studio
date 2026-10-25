@@ -1,0 +1,88 @@
+/* node tests/browser_export.cjs http://127.0.0.1:5005 [report-directory] */
+const {chromium}=require('playwright');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+let browser;
+(async()=>{
+  browser=await chromium.launch({headless:true,
+    ...(process.env.MOPAC_BROWSER?{executablePath:process.env.MOPAC_BROWSER}:{}),
+    args:['--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+  const page=await browser.newPage({viewport:{width:1440,height:960}});
+  const base=process.argv[2]||'http://127.0.0.1:5005',reports=process.argv[3];
+  const errors=[],exports=[],passed=[];
+  page.on('pageerror',e=>errors.push(e.message));
+  const graph=()=>page.evaluate(()=>JSON.parse(JSON.stringify(MopacEditor.active?MopacEditor.molecule:currentMol)));
+  const save=async format=>{
+    await page.selectOption('#exportFormat',format);
+    const responsePromise=page.waitForResponse(r=>r.url().endsWith('/api/export'));
+    await page.click('#exportSave');
+    const response=await responsePromise,result=await response.json();
+    assert(result.ok,JSON.stringify(result));exports.push(result);
+    await page.waitForFunction(()=>!document.getElementById('exportSave').disabled);
+    return result;
+  };
+  const done=(name)=>{passed.push(name);console.log('PASS '+name)};
+  await page.goto(base);
+  await page.waitForFunction(()=>document.querySelector('#calcGrid input'));
+  await page.fill('#smilesInput','CCO');await page.click('#smilesBtn');
+  await page.waitForFunction(()=>currentMol?.atoms?.length===9);
+  await page.click('#exportBtn');
+  const zip=await save('zip');
+  assert(zip.path.endsWith('.zip'));
+  done('Normal structure ZIP saved through UI');
+  await page.click('#exportClose');await page.click('#edit3DBtn');
+  await page.fill('#editorX','3.123456789');await page.locator('#editorX').press('Tab');
+  const before=await graph(),history=await page.evaluate(()=>MopacEditor.history.length);
+  await page.click('#exportBtn');const json=await save('json');
+  assert.deepEqual(await graph(),before);
+  assert.equal(await page.evaluate(()=>MopacEditor.history.length),history);
+  assert(await page.evaluate(()=>MopacEditor.active));
+  done('Exporting an active draft keeps exact coordinates, graph and undo history');
+  const restored=await (await page.request.post(base+'/api/files/load',{data:{path:json.path}})).json();
+  assert.deepEqual(restored.mol.atoms,before.atoms);assert.deepEqual(restored.mol.bonds,before.bonds);
+  const downloadEvent=page.waitForEvent('download');await page.click('#exportDownload');
+  const download=await downloadEvent;const downloaded=await download.path();
+  assert.deepEqual(JSON.parse(fs.readFileSync(downloaded,'utf8')).structure.atoms,before.atoms);
+  done('JSON download and backend restore preserve full coordinate precision');
+  await page.click('#exportClose');await page.click('#editorClose');
+  await page.evaluate(p=>loadFile(p),json.path);
+  assert.deepEqual((await graph()).atoms,before.atoms);
+  assert(await page.isDisabled('#calcBtn'));
+  done('Reloading saved JSON restores draft and keeps calculation disabled until Apply');
+  await page.click('#edit3DBtn');
+  const saveResponse=page.waitForResponse(r=>r.url().endsWith('/api/export'));
+  await page.click('#saveBtn');const saved=(await (await saveResponse).json());
+  assert(saved.ok);exports.push(saved);assert(await page.evaluate(()=>MopacEditor.active));
+  done('Quick save works during editing without applying hydrogens or closing the editor');
+  await page.click('#editorClose');await page.fill('#smilesInput','O');await page.click('#smilesBtn');
+  await page.waitForFunction(()=>currentMol?.atoms?.length===3&&!currentMol.editor_draft);
+  await page.click('#calcBtn');
+  for(const key of ['dipole','molecular_orbitals'])await page.locator(`#calcGrid input[value="${key}"]`).check();
+  await page.click('#runCalc');
+  await page.waitForFunction(()=>document.querySelectorAll('#results .badge.ok').length===2,{},{timeout:120000});
+  await page.locator('.orb-btn').filter({has:page.locator('b',{hasText:/^HOMO$/})}).click();
+  await page.waitForFunction(()=>document.querySelector('#toast').textContent.includes('오비탈 표시 완료'));
+  assert.equal(await page.evaluate(()=>currentMol.orbitalLabel),'HOMO');
+  await page.click('#exportBtn');const csv=await save('csv');
+  const csvResponse=await page.request.get(base+'/api/files/download?path='+encodeURIComponent(csv.path));
+  const csvData=await csvResponse.body();assert.equal(csvData.subarray(0,3).toString('hex'),'efbbbf');
+  assert.match(csvData.toString('utf8'),/dipole/);
+  done('Real calculation results exported as Excel-readable CSV');
+  const resultZip=await save('zip');assert(resultZip.ok);done('ZIP includes real calculation results and original files');
+  const png=await save('png');
+  const pngData=await (await page.request.get(base+'/api/files/download?path='+encodeURIComponent(png.path))).body();
+  assert.equal(pngData.subarray(0,8).toString('hex'),'89504e470d0a1a0a');
+  done('Current WebGL view exported as a real PNG');
+  let folderPath;
+  await page.route('**/api/files/open-folder',async route=>{
+    folderPath=route.request().postDataJSON().path;await route.fulfill({json:{ok:true}});
+  });
+  await page.click('#exportOpenFolder');assert.equal(folderPath,png.path);
+  done('Saved-file folder button targets the just-exported file');
+  if(reports){fs.mkdirSync(reports,{recursive:true});await page.screenshot({path:path.join(reports,'export-dialog.png')});}
+  assert.deepEqual(errors,[]);done('No uncaught browser errors');
+  if(reports)fs.writeFileSync(path.join(reports,'results.json'),JSON.stringify({passed,exports},null,2));
+  console.log(passed.length+' export browser scenarios passed');
+  await browser.close();
+})().catch(async e=>{console.error(e);if(browser)await browser.close();process.exit(1)});
