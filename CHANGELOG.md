@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.1.0 — 2026-10-25
+
+- Automatically download official MOPAC 23.2.5 during Install/Start on Windows and Linux x86-64; preserve upstream licenses, citations and runtime layout.
+- Pin release URLs and official SHA-256 digests, verify downloads before extraction and reuse intact local installations without network access.
+- Detect corrupted engine files, reinstall safely and retain the old copy separately.
+- Honor explicit `MOPAC_EXE` configuration; add `--no-engine` for editor-only/offline use. Keep existing MOPAC2016 installations untouched.
+- Prefer the managed official engine over implicit legacy portable locations.
+- Run modern command-line MOPAC without the legacy Windows GUI desktop/window-hiding helpers.
+- Add offline installer/repair tests and real-engine API integration tests for geometry, energy, charges, dipole, vibrations and disconnected-system HOMO/LUMO generation.
+- Run official-engine installation and integration tests in Windows/Linux CI.
+
 ## 3.0.1 — 2026-10-25
 
 ### Installation and distribution

@@ -11,6 +11,8 @@ import subprocess
 import sys
 import venv
 
+from engine_setup import ensure_engine
+
 ROOT = Path(__file__).resolve().parent
 ENV = ROOT / ".venv"
 REQUIREMENTS = ROOT / "requirements.txt"
@@ -50,9 +52,12 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Install and start MOPAC Studio locally")
     parser.add_argument("--setup-only", action="store_true", help="Install dependencies without starting the app")
     parser.add_argument("--background", action="store_true", help="Run the app without a persistent console")
+    parser.add_argument("--no-engine", action="store_true", help="Skip MOPAC installation for editor-only/offline use")
     args = parser.parse_args(argv)
     try:
         interpreter = ensure_environment()
+        if not args.no_engine:
+            ensure_engine(ROOT)
         if args.setup_only:
             print("Installation complete. Run Start.bat or python launcher.py.")
             return 0

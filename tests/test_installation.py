@@ -19,6 +19,9 @@ class LauncherTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name) / 'app with spaces'
         self.root.mkdir()
+        engine = patch.object(launcher, 'ensure_engine', return_value=self.root / 'mopac.exe')
+        self.engine = engine.start()
+        self.addCleanup(engine.stop)
         self.env = self.root / '.venv'
         self.requirements = self.root / 'requirements.txt'
         self.requirements.write_text('dependency==1.0\n', encoding='utf-8')
@@ -78,6 +81,18 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(launcher.main(['--background']), 1)
         spawn.assert_not_called()
 
+    def test_editor_only_explicitly_skips_engine_download(self):
+        with patch.object(launcher, 'ensure_environment', return_value=launcher.environment_python()):
+            self.assertEqual(launcher.main(['--setup-only', '--no-engine']), 0)
+        self.engine.assert_not_called()
+
+    def test_engine_install_failure_does_not_start_app(self):
+        self.engine.side_effect = RuntimeError('engine download failed')
+        with patch.object(launcher, 'ensure_environment', return_value=launcher.environment_python()), \
+             patch.object(launcher.subprocess, 'Popen') as spawn:
+            self.assertEqual(launcher.main(['--background']), 1)
+        spawn.assert_not_called()
+
     def test_background_uses_private_environment_and_hides_windows_console(self):
         interpreter = launcher.environment_python()
         with patch.object(launcher, 'ensure_environment', return_value=interpreter), \
@@ -115,6 +130,12 @@ class MopacDiscoveryTests(unittest.TestCase):
              patch.object(mopac_runner.os.path, 'isfile', return_value=False), \
              patch.object(mopac_runner.shutil, 'which', side_effect=[None, '/opt/mopac/mopac.exe']):
             self.assertEqual(mopac_runner.find_mopac(), '/opt/mopac/mopac.exe')
+
+    def test_managed_engine_precedes_legacy_portable_engine(self):
+        with patch.dict(os.environ, {}, clear=True), \
+             patch.object(mopac_runner, 'managed_executable', return_value=Path('/managed/bin/mopac')), \
+             patch.object(mopac_runner.os.path, 'isfile', return_value=True):
+            self.assertEqual(mopac_runner.find_mopac(), str(Path('/managed/bin/mopac')))
 
 
 if __name__ == '__main__':

@@ -61,7 +61,7 @@ def index():
 
 @app.route("/api/version")
 def api_version():
-    return jsonify({"ok": True, "version": "3.0.1", "build": "v3-orbital-atomic-number-fix-2026-10-25", "editor_api": True,
+    return jsonify({"ok": True, "version": "3.1.0", "build": "v3-official-mopac-auto-install-2026-10-25", "editor_api": True,
                     "fragments": True, "dragging": True})
 
 

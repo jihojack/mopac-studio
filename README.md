@@ -21,21 +21,25 @@ cd mopac-studio
 
 ### 3. 앱 설치 및 실행
 
-1. **`Install.bat`**를 더블클릭합니다. 이 폴더의 `.venv`에 필요한 패키지를 설치합니다. 최초 설치에는 인터넷이 필요합니다.
+1. **`Install.bat`**를 더블클릭합니다. 이 폴더의 `.venv`에 필요한 패키지를 설치하고 **공식 오픈소스 MOPAC 23.2.5도 자동 설치**합니다. 최초 설치에는 인터넷이 필요합니다.
 2. **`Start.bat`** 또는 **`MopacStudio 실행.bat`**를 더블클릭합니다.
 3. 자동으로 열린 브라우저 탭에서 사용합니다. 주소는 `http://127.0.0.1:5005`부터 사용 가능한 포트가 선택됩니다.
 
-`Start.bat`도 설치되지 않은 패키지를 자동 설치하므로 바로 실행해도 됩니다. 시스템 Python에 앱 패키지를 직접 설치하지 않습니다.
+`Start.bat`도 설치되지 않은 패키지와 엔진을 자동 설치하므로 바로 실행해도 됩니다. 시스템 Python이나 Windows의 전역 설정을 변경하지 않습니다. 이미 설치한 엔진은 무결성을 확인하고 재사용하므로 매번 다운로드하지 않습니다.
 
 콘솔 창 없이 사용하려면 **`Start-Background.bat`** 또는 **`MopacStudio 백그라운드 실행.bat`**를 사용합니다. 백그라운드 서버는 브라우저 연결이 약 90초간 없으면 종료됩니다. 최초 패키지 설치 때는 설치 창이 표시됩니다.
 
-> MOPAC 없이도 SMILES 입력, 분자 편집, 파일 열기·저장은 사용할 수 있습니다. **양자화학 계산에는 별도의 MOPAC 실행 파일이 필요합니다.**
+> 이제 MOPAC을 별도로 찾아 설치할 필요가 없습니다. 다운로드를 생략하고 편집기만 사용하려면 `python launcher.py --no-engine` 또는 `Start.bat --no-engine`으로 실행하세요. Python 패키지는 먼저 설치되어 있어야 오프라인으로 사용할 수 있습니다.
 
-## MOPAC 연결하기
+## MOPAC 자동 설치와 기존 엔진 사용
 
-이 앱은 **MOPAC2016 Windows 실행 파일로 검증**했습니다. MOPAC 실행 파일·런타임 DLL·라이선스는 저장소에 포함하지 않습니다. 공식 배포 및 설치 정보는 [OpenMOPAC 다운로드](https://openmopac.net/download/)와 [설치 안내](https://openmopac.net/download/installer/)를 참고하세요. 현재 공식 배포판은 MOPAC2016 이후의 오픈소스 버전이므로, 최신 버전과의 모든 계산·출력 파싱 호환성은 아직 검증하지 않았습니다.
+기본 설치 엔진은 [공식 MOPAC 23.2.5](https://github.com/openmopac/mopac/releases/tag/v23.2.5)이며 **Apache 2.0**으로 배포됩니다. 설치기는 공식 GitHub의 압축 파일을 다운로드하고, 저장소에 고정한 SHA-256으로 검증한 뒤 `_engines/`에 설치합니다. 배포본의 실행 파일·런타임·LICENSE·인용 정보를 그대로 보존합니다. 엔진 파일은 Git에 올리지 않습니다.
 
-다음 중 하나로 실행 파일을 연결합니다.
+자동 설치는 **Windows/Linux x86-64**를 지원합니다. 기본 엔진 버전은 검증한 버전으로 고정되어 자동으로 최신 버전으로 바뀌지 않습니다. 체크섬과 다운로드 주소는 [engine_setup.py](engine_setup.py)에 있습니다. 손상된 설치는 재설치하되 이전 파일은 `_engines/` 안에 별도 보존합니다.
+
+공식 엔진에서 구조 최적화·생성엔탈피·원자 전하·쌍극자·진동·분자오비탈 생성 경로를 실제 API로 검증했습니다. 두 분자가 포함된 시스템의 HOMO/LUMO Cube 생성도 검사합니다. 모든 계산 메뉴·모든 화학종의 정확성이나 수렴을 보장하는 검증은 아닙니다.
+
+**이미 설치한 엔진을 계속 사용하려면** 다음 방법으로 명시적으로 지정하세요. `MOPAC_EXE`가 설정되어 있으면 자동 다운로드보다 우선합니다.
 
 **방법 A — 환경 변수로 지정**
 
@@ -48,7 +52,7 @@ python launcher.py
 
 계속 사용하려면 Windows의 **환경 변수 편집 → 사용자 변수**에서 `MOPAC_EXE`에 실행 파일의 전체 경로를 등록한 뒤 앱을 다시 실행합니다. 필요한 DLL은 MOPAC 배포판의 원래 폴더 구조를 유지하세요.
 
-**방법 B — 기존 포터블 폴더 구조 사용**
+**기존 포터블 폴더 구조도 지원**
 
 ```text
 작업폴더/
@@ -60,7 +64,9 @@ python launcher.py
    └─ ...배포판에 포함된 런타임 파일
 ```
 
-앱 내부의 `mopac2016/MOPAC2016.exe`도 검색합니다. 환경 변수와 포터블 경로에 실행 파일이 없으면 시스템 `PATH`의 `MOPAC2016.exe`, `mopac.exe`, `mopac` 순서로 확인합니다.
+엔진 검색 순서는 **`MOPAC_EXE` → 자동 설치한 엔진 → 기존 포터블 경로 → 시스템 PATH**입니다. 앱 내부의 `mopac2016/MOPAC2016.exe`도 검색합니다. 기존 MOPAC2016 파일은 변경하지 않습니다. 설치된 최신 엔진 대신 2016을 사용하려면 `MOPAC_EXE`를 지정하세요.
+
+Linux x86-64에서는 `python3.11 launcher.py --setup-only`로 설치하고 `python3.11 launcher.py`로 실행할 수 있습니다. macOS/ARM은 자동 설치 대상이 아니므로 직접 설치한 엔진의 `MOPAC_EXE`를 지정하거나 `--no-engine`을 사용하세요.
 
 ## 처음 사용하기
 
@@ -101,7 +107,8 @@ Ctrl+Z와 **실행 취소**로 원자·결합 수정 및 이동을 되돌릴 수
 |---|---|
 | `python`을 찾을 수 없음 | Python 3.11 64-bit 설치 및 PATH/Python Launcher 설정 |
 | 패키지 설치 실패 | 인터넷 연결 확인 후 설치 창의 오류를 확인하고 `Install.bat` 재실행 |
-| MOPAC 실행 파일을 찾을 수 없음 | `MOPAC_EXE` 경로, 실행 파일 및 배포판 런타임 파일 확인 |
+| MOPAC 다운로드/체크섬 오류 | 인터넷 연결을 확인하고 `Install.bat` 재실행. 편집기만 쓰려면 `--no-engine` 사용 |
+| MOPAC 실행 파일을 찾을 수 없음 | `Install.bat` 재실행. 직접 지정한 경우 `MOPAC_EXE` 경로 확인 |
 | MMFF/UFF 정리 실패 | 현재 초안은 유지됩니다. 겹친 원자·비정상 결합 거리를 수정하고 재시도 |
 | 수소 보정 생략 경고 | 입력 원자의 좌표는 유지됩니다. 수소 배치를 확인하고 계산에 적용 |
 | 편집기 API 404 | 오래된 서버 탭을 닫고 현재 폴더의 실행 버튼으로 새로 열린 주소 사용 |
@@ -129,13 +136,22 @@ node tests/browser_recovery.cjs http://127.0.0.1:5005
 
 앱 서버가 다른 포트를 골랐다면 실제 주소를 사용하세요. 설치된 Chrome/Edge를 쓸 때는 `MOPAC_BROWSER`에 실행 파일 전체 경로를 지정할 수 있습니다. Node.js와 Playwright는 일반 앱 사용자에게 필요하지 않습니다.
 
-GitHub Actions는 Windows/Linux 및 Python 3.11/3.12에서 Python 테스트와 JavaScript 구문 검사를 실행합니다. 실제 MOPAC 실행 파일을 사용하는 계산은 자동 테스트에 포함되지 않습니다.
+GitHub Actions는 Windows/Linux 및 Python 3.11/3.12에서 Python 테스트와 JavaScript 구문 검사를 실행합니다. 두 운영체제의 Python 3.11 작업은 공식 MOPAC 자동 설치와 실제 API 계산·HOMO/LUMO 생성 통합 테스트도 수행합니다.
+
+실제 엔진 통합 테스트만 실행하려면:
+
+```powershell
+python engine_setup.py
+$env:RUN_MOPAC_INTEGRATION = '1'
+.\.venv\Scripts\python.exe -m unittest discover -s tests -p test_mopac_integration.py -v
+```
 
 ## 파일 구성
 
 ```text
 app.py                 로컬 서버와 API
 launcher.py            독립 환경 생성·의존성 설치·실행
+engine_setup.py        공식 MOPAC 다운로드·체크섬 검증·독립 설치
 structure.py           SMILES/PubChem/파일 구조 변환
 editor_3d.py            직접 그린 구조 검증·수소 추가·안전한 힘장 보정
 mopac_runner.py        MOPAC 실행 파일 검색·입력 생성·실행·결과 파싱
@@ -150,6 +166,6 @@ workspace/             사용자 구조 및 계산 결과 (Git 제외)
 
 ## English quick start
 
-MOPAC Studio is a local browser interface for molecular drawing, MOPAC calculations, and orbital isosurfaces. On Windows, install **64-bit Python 3.11**, download and extract this repository, then run **Install.bat** and **Start.bat**. Dependencies are installed into a project-local `.venv`.
+MOPAC Studio is a local browser interface for molecular drawing, MOPAC calculations, and orbital isosurfaces. On Windows, install **64-bit Python 3.11**, download and extract this repository, then run **Install.bat** and **Start.bat**. Python dependencies are installed into a project-local `.venv`, and the official **MOPAC 23.2.5** engine is downloaded, SHA-256 verified, and installed automatically into `_engines/`.
 
-The application was validated with **MOPAC2016 for Windows**. Install the engine separately and point the `MOPAC_EXE` environment variable to its executable; engine binaries and license files are not bundled. The current open-source MOPAC releases have not been fully validated with every parser/calculation in this interface. Molecular drawing works without the engine. Save your draft before refreshing or closing the browser.
+Automatic engine installation supports **Windows/Linux x86-64**. The official distribution's license and runtime files are preserved; engine binaries are not committed to Git. Real-engine API tests cover geometry, energy, charges, dipole, vibrations and HOMO/LUMO generation. Existing MOPAC2016 installations can still be selected using `MOPAC_EXE`. Use `--no-engine` for editor-only use or to skip engine downloads. Save your draft before refreshing or closing the browser.

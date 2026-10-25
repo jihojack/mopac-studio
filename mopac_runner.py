@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
-"""MOPAC2016 입력 생성 / 실행 / 결과 파싱 모듈.
+"""MOPAC 입력 생성 / 실행 / 결과 파싱 모듈.
 
-요구된 20가지 계산 종류를 MOPAC 키워드로 매핑하고, 각각을 실행한 뒤
+22가지 계산 종류를 MOPAC 키워드로 매핑하고, 각각을 실행한 뒤
 출력(.out / .aux)을 파싱한다. 실패한 계산은 결과에 error 플래그를 단다.
 """
 import os
@@ -10,6 +10,7 @@ import subprocess
 import shutil
 import threading
 import time
+from engine_setup import managed_executable
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -19,6 +20,9 @@ def find_mopac():
     configured = os.environ.get("MOPAC_EXE", "").strip().strip('"')
     if configured:
         return os.path.abspath(os.path.expanduser(os.path.expandvars(configured)))
+    managed = managed_executable(HERE)
+    if managed is not None and os.path.isfile(managed):
+        return str(managed)
     portable = [os.path.join(HERE, "..", "mopac2016", "MOPAC2016.exe"),
                 os.path.join(HERE, "mopac2016", "MOPAC2016.exe")]
     for candidate in portable:
@@ -140,15 +144,16 @@ def build_input(mol_dict, calc_key, charge=0, mult=1, eps=None):
 # 실행
 # ---------------------------------------------------------------------------
 def run_mopac(mop_path, timeout=600):
-    """MOPAC2016 실행. (returncode, stdout) 반환."""
+    """MOPAC 실행. (returncode, stdout) 반환. Legacy Windows GUI도 지원."""
     if not os.path.exists(MOPAC_EXE):
         raise FileNotFoundError(
             f"MOPAC 실행 파일을 찾을 수 없습니다: {MOPAC_EXE}. "
-            "MOPAC을 별도로 설치하고 MOPAC_EXE 환경 변수에 실행 파일 경로를 지정하세요. "
+            "Install.bat 또는 python launcher.py --setup-only로 공식 MOPAC을 자동 설치하세요. "
             "설정 방법은 README.md를 확인하세요.")
     env = os.environ.copy()
     env["PATH"] = MOPAC_DIR + os.pathsep + env.get("PATH", "")
-    if os.name == "nt":
+    legacy_gui = os.name == "nt" and os.path.basename(MOPAC_EXE).lower() == "mopac2016.exe"
+    if legacy_gui:
         try:
             return _run_mopac_hidden_desktop(mop_path, env, timeout)
         except Exception as hidden_error:
@@ -166,7 +171,7 @@ def run_mopac(mop_path, timeout=600):
         **popen_opts)
     hide_stop = None
     hide_thread = None
-    if os.name == "nt":
+    if legacy_gui:
         hide_stop = threading.Event()
         hide_thread = threading.Thread(
             target=_hide_windows_while_running,

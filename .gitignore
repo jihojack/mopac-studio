@@ -23,6 +23,7 @@ Thumbs.db
 /REGRESSION_REPORT.md
 /CHANGELOG_*.md
 /mopac2016/
+/_engines/
 *.exe
 *.dll
 dist/

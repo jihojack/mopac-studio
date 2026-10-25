@@ -19,6 +19,13 @@ jobs:
           cache: pip
       - run: python -m pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
+      - name: Install official MOPAC and test real calculations
+        if: matrix.python == '3.11'
+        env:
+          RUN_MOPAC_INTEGRATION: '1'
+        run: |
+          python engine_setup.py
+          python -m unittest discover -s tests -p test_mopac_integration.py -v
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

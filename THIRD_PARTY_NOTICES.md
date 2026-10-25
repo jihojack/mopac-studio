@@ -15,6 +15,10 @@ The license and bundled-code notices were retrieved from the official upstream s
 
 Flask, Flask-Cors, RDKit, PubChemPy, requests, NumPy and their transitive dependencies are installed separately by pip from `requirements.txt`. Each retains its own upstream license; these packages are not vendored into this repository.
 
-## External programs
+## Automatically downloaded MOPAC
 
-MOPAC and Avogadro executables, runtime libraries, activation information, and license files are not distributed with this project. Obtain them from their respective official distributions and follow the applicable terms.
+The installer downloads the unmodified official [MOPAC 23.2.5 release](https://github.com/openmopac/mopac/releases/tag/v23.2.5) for Windows/Linux x86-64. MOPAC is distributed under [Apache 2.0](licenses/MOPAC-23.2.5.LICENSE). The downloaded distribution's LICENSE, CITATION.cff, runtime libraries and folder structure are preserved in `_engines/`. Archive URLs and SHA-256 values are pinned in `engine_setup.py`.
+
+The repository itself does not redistribute MOPAC executable/DLL files or license activation information. Downloads come directly from the official upstream release. The bundled Intel/OpenMP runtime remains part of the upstream distribution under its applicable terms.
+
+Legacy MOPAC2016 and optional Avogadro installations are not modified or redistributed by the automatic installer. Explicit `MOPAC_EXE` configuration takes priority over automatic installation.
