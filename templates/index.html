@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MOPAC Studio</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=12">
+<script src="{{ url_for('static', filename='lib/3Dmol-min.js') }}"></script>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>⚛ MOPAC Studio</h1>
+    <span class="sub">MOPAC2016 · RDKit · PubChem · Avogadro</span>
+    <span class="spacer"></span>
+    <button class="btn sm" id="toggleLeft">왼쪽 패널</button>
+    <button class="btn sm" id="toggleRight">결과 패널</button>
+    <button class="btn sm" id="gpuToggle" title="WebGL GPU 가속 (high-performance GPU 요청)">GPU 가속: ON</button>
+    <button class="btn sm" id="themeToggle">흑백 전환</button>
+    <button class="btn primary" id="calcBtn">계산하기 ▾</button>
+  </header>
+
+  <div id="main">
+    <!-- 좌측: 입력 + 로컬 파일 -->
+    <aside id="left">
+      <div class="section">
+        <h2>구조 입력</h2>
+        <div class="input-row">
+          <input id="smilesInput" placeholder="SMILES (예: CCO)">
+          <button class="btn sm" id="smilesBtn">생성</button>
+        </div>
+        <div class="input-row">
+          <input id="pubchemInput" placeholder="PubChem 이름/CID (예: aspirin)">
+          <button class="btn sm" id="pubchemBtn">불러오기</button>
+        </div>
+        <div class="input-row">
+          <button class="btn sm primary" id="edit3DBtn" style="flex:1">🧩 화면에서 3D 그리기</button>
+        </div>
+        <div class="input-row">
+          <button class="btn sm" id="drawBtn" style="flex:1">Avogadro 외부 편집기</button>
+          <button class="btn sm" id="saveBtn" title="현재 분자를 워크스페이스에 .xyz로 저장">💾</button>
+        </div>
+      </div>
+      <div class="section" style="flex:0 0 auto;display:flex;align-items:center;gap:8px">
+        <h2 style="margin:0;flex:1">로컬 파일</h2>
+        <button class="btn sm" id="refreshBtn">↻</button>
+      </div>
+      <div id="fileTree"></div>
+    </aside>
+    <div class="resizer" id="leftResizer" title="왼쪽 패널 크기 조절"></div>
+
+    <!-- 중앙: 3D 뷰어 -->
+    <section id="center">
+      <div id="viewer"></div>
+      <aside id="editorPanel" class="editor-panel" aria-label="3D 분자 직접 편집 패널">
+        <div class="editor-title"><b>3D 분자 편집기</b><button class="btn sm" id="editorClose" title="현재 구조를 보존하고 닫기" aria-label="현재 구조를 보존하고 편집기 닫기">✕</button></div>
+        <label class="editor-caption">분자 이름<input id="editorName" type="text" value="직접 그린 분자" maxlength="160"></label>
+        <label class="editor-caption">도구</label>
+        <div class="editor-modes" id="editorModes">
+          <button class="chip" data-edit-mode="add" title="빈 3D 화면을 클릭하면 새 원자를 독립적으로 배치">원자 배치</button>
+          <button class="chip" data-edit-mode="bond" title="원자 두 개를 클릭해 결합 생성 또는 변경">결합</button>
+          <button class="chip" data-edit-mode="select" title="원자 하나를 잡아 이동">원자 이동</button>
+          <button class="chip" data-edit-mode="fragment" title="선택 원자가 속한 결합 연결 조각 전체를 이동">분자 조각 이동</button>
+          <button class="chip" data-edit-mode="delete" title="클릭한 원자 삭제">삭제</button>
+        </div>
+        <div class="editor-grid">
+          <label>원소<select id="editorElement"><option>C</option><option>N</option><option>O</option><option>H</option><option>F</option><option>S</option><option>P</option><option>B</option><option>Cl</option><option>Br</option><option>I</option><option>Si</option></select></label>
+          <label>결합 차수<select id="editorOrder"><option value="1">단일 (1)</option><option value="2">이중 (2)</option><option value="3">삼중 (3)</option></select></label>
+        </div>
+        <div class="editor-actions">
+          <button class="btn sm" id="editorAdd" title="3D 뷰어 중앙 부근에 별도의 원자 추가">＋ 원자 빠른 추가</button>
+          <button class="btn sm" id="editorUndo">↶ 실행 취소</button>
+          <button class="btn sm" id="editorClear">초기화</button>
+        </div>
+        <p class="editor-fragment-info" id="editorFragmentInfo">분자 조각 정보</p>
+        <p class="editor-tip" id="editorHint">빈 화면 클릭 → 원자 생성 → 결합 모드에서 원자 두 개 선택.</p>
+        <label class="editor-drag-control">새 원자 배치 깊이 (Å)
+          <input id="editorPlaceDepth" type="number" step="0.5" min="-10" max="10" value="0" aria-label="새 원자 배치 카메라 깊이">
+        </label>
+        <label class="editor-drag-control">마우스 드래그 방향
+          <select id="editorDragAxis" aria-label="원자 드래그 방향">
+            <option value="screen">화면 평면 (자유 이동)</option>
+            <option value="x">X축 고정</option>
+            <option value="y">Y축 고정</option>
+            <option value="z">Z축 고정</option>
+            <option value="depth">화면 깊이 방향</option>
+          </select>
+        </label>
+
+        <div class="editor-selected">
+          <div class="editor-title"><b id="editorSelectedLabel">원자를 선택하세요</b><span id="editorAtomCount"></span></div>
+          <div class="editor-grid">
+            <label>원소<select id="editorAtomElement"><option>C</option><option>N</option><option>O</option><option>H</option><option>F</option><option>S</option><option>P</option><option>B</option><option>Cl</option><option>Br</option><option>I</option><option>Si</option></select></label>
+            <label>형식전하<input id="editorFormalCharge" type="number" value="0" min="-4" max="4" step="1"></label>
+          </div>
+          <div class="editor-coords">
+            <label>X (Å)<input id="editorX" type="number" step="0.1"></label>
+            <label>Y (Å)<input id="editorY" type="number" step="0.1"></label>
+            <label>Z (Å)<input id="editorZ" type="number" step="0.1"></label>
+          </div>
+          <div class="editor-nudge">
+            <button class="btn sm" data-nudge="x:-0.1">X−</button><button class="btn sm" data-nudge="x:0.1">X+</button>
+            <button class="btn sm" data-nudge="y:-0.1">Y−</button><button class="btn sm" data-nudge="y:0.1">Y+</button>
+            <button class="btn sm" data-nudge="z:-0.1">Z−</button><button class="btn sm" data-nudge="z:0.1">Z+</button>
+          </div>
+        </div>
+        <div class="editor-bottom">
+          <button class="btn sm" id="editorRelax">결합 구조 정리 (MMFF/UFF)</button>
+          <button class="btn sm primary" id="editorApply">수소 추가 → 계산에 적용</button>
+        </div>
+        <p class="editor-note"><b>자유 배치:</b> 「원자 배치」에서 빈 화면을 짧게 클릭하면 결합 없는 원자가 생성됩니다. 결합은 「결합」에서 두 원자를 클릭해 연결합니다. 배치 깊이를 바꾸거나 화면을 회전하면 3차원 위치를 지정할 수 있습니다. 서로 연결되지 않은 분자 조각도 그대로 유지되며 「분자 조각 이동」으로 상대 위치를 조절할 수 있습니다.<br><b>원자 이동:</b> 「선택/이동」에서 원자 위에 마우스를 올려 끌면 해당 원자만 이동하고 결합선이 따라갑니다. 빈 공간을 끌면 분자가 회전합니다. Shift+드래그는 화면 깊이 방향, 휠은 확대/축소입니다. 축 고정은 위 선택 메뉴를 사용하세요. Ctrl+Z는 이동 취소. 실제 계산은 별도 설치된 MOPAC2016에서 실행됩니다.</p>
+      </aside>
+      <div id="viewer-toolbar">
+        <button class="chip" data-style="stick">막대</button>
+        <button class="chip" data-style="sphere">공막대</button>
+        <button class="chip" data-style="line">선</button>
+        <button class="chip" id="labelToggle">라벨</button>
+        <button class="chip" id="dipoleToggle">쌍극자</button>
+      </div>
+      <div id="mol-info">분자를 불러오세요</div>
+    </section>
+
+    <!-- 우측: 결과 -->
+    <div class="resizer hidden" id="rightResizer" title="결과 패널 크기 조절"></div>
+    <aside id="right">
+      <div class="rhead">
+        <h2>계산 결과</h2>
+        <button class="btn sm" id="closeRight">✕</button>
+      </div>
+      <div id="results"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- 계산 선택 모달 -->
+<div class="modal-bg" id="calcModal">
+  <div class="modal">
+    <div class="mhead"><h2>MOPAC 계산 선택</h2>
+      <button class="btn sm" id="selectAll">전체</button>
+      <button class="btn sm" id="selectNone" style="margin-left:6px">해제</button>
+    </div>
+    <div class="mbody">
+      <div class="params">
+        <label>전하 <input type="number" id="chargeIn" value="0" step="1"></label>
+        <label>스핀다중도 <input type="number" id="multIn" value="1" min="1" step="1"></label>
+        <label>용매 ε(COSMO) <input type="number" id="epsIn" value="78.4" step="0.1"></label>
+      </div>
+      <div class="calc-grid" id="calcGrid"></div>
+    </div>
+    <div class="mfoot">
+      <span class="sub" id="calcCount" style="color:var(--muted);font-size:12px"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn" id="cancelCalc">취소</button>
+      <button class="btn primary" id="runCalc">선택 계산 실행 ▶</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script src="{{ url_for('static', filename='js/editor.js') }}?v=15"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}?v=15"></script>
+</body>
+</html>
